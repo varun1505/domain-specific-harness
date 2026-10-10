@@ -40,6 +40,7 @@ Then open http://localhost:8181.
 
 ## Credits
 
-Fonts: Instrument Serif and Inter, both under the SIL Open Font License.
+- **Illustrations:** made with the [illo skill](https://illo-skill.com) by [Trevin Chow](https://github.com/tmchow) ([github.com/tmchow/illo-skill](https://github.com/tmchow/illo-skill)), using its default mascot, Blot, in the riso look.
+- **Fonts:** Instrument Serif and Inter, both under the SIL Open Font License.
 
 Varun Srinivas · CTO & Chief AI Officer, Coditas
