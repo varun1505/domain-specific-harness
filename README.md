@@ -6,6 +6,14 @@ Slides from my talk at **AAIF Pune Connect #3 · Agentic AI Day**, 10 October 20
 
 Everyone uses the same AI models. What you build around the model, the harness, decides how good the results are. This talk shows how to build one for your own field, using a Jyotish (Indian astrology) harness as the worked example. It follows one question, "When will I become a millionaire?", through five levers: context, tools, checks, rules and memory.
 
+## Try the tools
+
+The Jyotish tools from the talk are on a free public MCP server. Plug them into your own agent and ask a question in plain words. **[Try it yourself →](try-it-yourself.md)**
+
+```
+claude mcp add --transport http jyotish https://mcp.jyotisha.fyi/mcp
+```
+
 ## Run it locally
 
 It's one HTML file with no build step and no network calls. Fonts and images are in this folder.
