@@ -1,0 +1,738 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Building a Domain-Specific Harness</title>
+<style>
+@font-face { font-family: "Instrument Serif"; src: url("fonts/InstrumentSerif-normal-400.woff2") format("woff2"); font-style: normal; font-weight: 400; }
+@font-face { font-family: "Instrument Serif"; src: url("fonts/InstrumentSerif-italic-400.woff2") format("woff2"); font-style: italic; font-weight: 400; }
+@font-face { font-family: "InterLocal"; src: url("fonts/Inter-normal-400.woff2") format("woff2"); font-weight: 100 900; }
+
+/* Layout: a fixed 1920×1080 paper stage, scaled to fit. Title top-left, content centred
+   in the space left over, one takeaway line on a rule at the bottom. Same system as AI FWD. */
+:root {
+  --paper: #F7F3E8;
+  --paper2: #FFFCF4;
+  --ink: #191410;
+  --muted: #7A7266;
+  --accent: #C42BD1;
+  --accent2: #0E9AA7;
+  --rule: rgba(25,20,16,.14);
+  --rule2: rgba(25,20,16,.07);
+  --serif: "Instrument Serif", Georgia, serif;
+  --sans: "InterLocal", "Inter", -apple-system, system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body { background: var(--paper); color: var(--ink); font-family: var(--sans); overflow: hidden; -webkit-font-smoothing: antialiased; }
+
+.viewport { position: fixed; inset: 0; overflow: hidden; }
+.stage { width: 1920px; height: 1080px; position: absolute; left: 50%; top: 50%; transform-origin: center center; background: var(--paper); }
+
+.slide { position: absolute; inset: 0; display: none; }
+.slide.active { display: block; animation: fade 300ms ease both; }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .slide.active { animation: none; } }
+.inner { position: absolute; inset: 0; padding: 104px 120px 92px; display: flex; flex-direction: column; }
+.footbar { position: fixed; left: 0; right: 0; bottom: 0; height: 3px; background: var(--accent); opacity: .9; z-index: 5; }
+
+/* type */
+.eyebrow { font-size: 20px; font-weight: 600; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); }
+.eyebrow + .huge, .eyebrow + .mid, .eyebrow + .stitle { margin-top: 22px; }
+.huge, .mid, .stitle { font-family: var(--serif); font-weight: 400; letter-spacing: -.015em; line-height: 1.04; text-wrap: balance; }
+.huge { font-size: 136px; }
+.mid { font-size: 96px; line-height: 1.06; }
+.stitle { font-size: 80px; }
+em { font-family: var(--serif); font-style: italic; color: var(--accent); }
+.say { font-size: 32px; line-height: 1.5; color: var(--muted); max-width: 1150px; margin-top: 28px; }
+.say b { color: var(--ink); font-weight: 600; }
+.kicker { margin-top: auto; border-top: 1px solid var(--rule); padding-top: 34px; font-family: var(--serif); font-size: 54px; line-height: 1.18; letter-spacing: -.01em; }
+.kicker.sm { font-size: 44px; }
+.src { font-size: 18px; color: var(--muted); opacity: .85; margin-top: 18px; }
+.mono { font-family: var(--mono); font-size: .88em; background: rgba(25,20,16,.06); padding: 2px 8px; border-radius: 5px; }
+.center { margin-top: auto; margin-bottom: auto; }
+
+/* illustration split */
+.split { display: grid; grid-template-columns: 1fr 1.05fr; gap: 64px; align-items: center; margin-top: auto; margin-bottom: auto; }
+.split.wide-img { grid-template-columns: .9fr 1.2fr; }
+.split img, .fig img { width: 100%; display: block; mix-blend-mode: multiply; -webkit-mask-image: radial-gradient(ellipse 72% 70% at 50% 50%, #000 78%, transparent 100%); mask-image: radial-gradient(ellipse 72% 70% at 50% 50%, #000 78%, transparent 100%); }
+.fig { display: flex; justify-content: center; margin: auto 0; }
+.fig img { max-height: 600px; width: auto; max-width: 100%; }
+.txt { min-width: 0; }
+
+/* three / four columns */
+.three { display: grid; grid-template-columns: repeat(3, 1fr); gap: 56px; margin: auto 0; }
+.four { display: grid; grid-template-columns: repeat(4, 1fr); gap: 44px; margin: auto 0; }
+.col h4 { font-family: var(--serif); font-weight: 400; font-size: 46px; line-height: 1.1; margin-bottom: 14px; }
+.col h4.on { color: var(--accent); }
+.three.big h4 { font-size: 60px; } .three.big p { font-size: 28px; }
+.col p { font-size: 25px; line-height: 1.45; color: var(--muted); }
+.col .bar { height: 3px; background: var(--rule); margin-bottom: 22px; }
+.col .bar.on { background: var(--accent); }
+
+/* numbers */
+.numline { display: flex; gap: 72px; margin: auto 0; }
+.numline .n { font-family: var(--serif); font-size: 124px; line-height: 1; color: var(--accent); }
+.numline .t { font-size: 25px; line-height: 1.45; color: var(--muted); margin-top: 16px; max-width: 470px; }
+.bignum { font-family: var(--serif); line-height: 1; display: flex; align-items: baseline; gap: 34px; margin-top: 26px; }
+.bignum .a { font-size: 150px; color: var(--muted); }
+.bignum .arr { font-size: 90px; color: var(--muted); }
+.bignum .b { font-size: 230px; color: var(--accent); font-style: italic; }
+
+/* tables */
+table.t { width: 100%; border-collapse: collapse; margin: auto 0; }
+table.t th { text-align: left; font-size: 20px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--ink); padding: 0 24px 16px 0; }
+table.t td { font-size: 27px; line-height: 1.4; color: var(--muted); border-bottom: 1px solid var(--rule2); padding: 20px 24px 20px 0; vertical-align: top; }
+table.t td b { color: var(--ink); font-weight: 600; }
+table.t td.hi { color: var(--accent); font-weight: 600; }
+table.cmp th:nth-child(3) { color: var(--accent); border-bottom: 3px solid var(--accent); }
+table.cmp td:nth-child(3) { color: var(--ink); }
+
+/* reasons list beside an illustration */
+.reasons { margin-top: 30px; display: flex; flex-direction: column; gap: 18px; }
+.reasons div { font-size: 26px; line-height: 1.45; color: var(--muted); }
+.reasons div b { color: var(--ink); font-weight: 650; }
+.reasons div b.hi { color: var(--accent); }
+
+/* vs */
+.vs { display: grid; grid-template-columns: 1fr 1fr; gap: 72px; margin: auto 0; }
+.vs h3 { font-family: var(--serif); font-weight: 400; font-size: 52px; margin-bottom: 22px; }
+.vs .a h3 { color: var(--accent); } .vs .b h3 { color: var(--accent2); }
+.vs ul { list-style: none; display: flex; flex-direction: column; gap: 16px; }
+.vs li { font-size: 28px; line-height: 1.45; color: var(--muted); padding-left: 30px; position: relative; }
+.vs li::before { content: ""; position: absolute; left: 0; top: 15px; width: 11px; height: 11px; border-radius: 50%; }
+.vs .a li::before { background: var(--accent); } .vs .b li::before { background: var(--accent2); }
+.vs li b { color: var(--ink); font-weight: 600; }
+
+/* quotes */
+.quote { font-family: var(--serif); font-size: 64px; line-height: 1.15; letter-spacing: -.01em; max-width: 1500px; }
+.quote.sm { font-size: 48px; }
+.attrib { font-size: 24px; color: var(--muted); margin-top: 26px; }
+.attrib b { color: var(--ink); font-weight: 600; }
+
+/* tweet cards */
+.tweets { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: start; margin: auto 0; }
+.tweets.one { grid-template-columns: 1fr; justify-items: center; }
+.tw { background: #222020; color: #E7E9EA; border-radius: 28px; padding: 44px 48px 40px; box-shadow: 0 18px 40px rgba(25,20,16,.18); max-width: 1180px; }
+.tw-head { display: flex; align-items: center; gap: 20px; }
+.tw-av { width: 72px; height: 72px; border-radius: 50%; flex: 0 0 72px; display: grid; place-items: center; font-weight: 700; font-size: 30px; color: #fff; }
+.tw-name { font-weight: 700; font-size: 29px; color: #fff; }
+.tw-handle { font-size: 24px; color: #8B98A5; }
+.tw-x { margin-left: auto; font-size: 46px; font-weight: 700; color: #fff; font-family: var(--sans); }
+.tw-body { font-size: 36px; line-height: 1.38; margin: 30px 0 26px; }
+.tw-body.big { font-size: 46px; }
+.tw-quote { border: 1px solid #3A3F44; border-radius: 18px; padding: 20px 24px; font-size: 25px; color: #B8C0C7; margin-bottom: 26px; line-height: 1.4; }
+.tw-quote b { color: #E7E9EA; }
+.tw-meta { font-size: 23px; color: #8B98A5; display: flex; gap: 30px; }
+.tw-meta b { color: #E7E9EA; font-weight: 600; }
+.cap { font-size: 20px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-top: 22px; }
+
+/* code */
+.code { font-family: var(--mono); font-size: 25px; line-height: 1.6; color: var(--ink); background: rgba(25,20,16,.045); border: 1px solid var(--rule); border-left: 4px solid var(--accent); border-radius: 8px; padding: 28px 34px; white-space: pre; overflow: hidden; }
+.code .c { color: var(--muted); } .code .k { color: var(--accent); font-weight: 600; }
+.code.sm { font-size: 22px; }
+
+/* numbered steps */
+.steps { display: grid; grid-template-columns: 1fr 1fr; gap: 36px 90px; margin: auto 0; }
+.step { display: grid; grid-template-columns: 70px 1fr; align-items: baseline; }
+.step .n { font-family: var(--serif); font-size: 64px; color: var(--accent); line-height: 1; }
+.step .t { font-size: 30px; line-height: 1.35; }
+.step .t span { display: block; font-size: 23px; color: var(--muted); margin-top: 6px; }
+
+/* rungs */
+.rungs { display: flex; flex-direction: column; gap: 14px; margin-top: 30px; }
+.rung { display: grid; grid-template-columns: 150px 1fr; align-items: baseline; gap: 18px; padding-bottom: 12px; border-bottom: 1px solid var(--rule2); }
+.rung .l { font-size: 18px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.rung code { font-family: var(--mono); font-size: 24px; color: var(--muted); }
+.rung.on .l, .rung.on code { color: var(--accent); }
+.rung.on code { font-weight: 600; }
+.rungs.tools .rung { grid-template-columns: 220px 1fr; }
+.rungs.tools .l { font-family: var(--mono); font-size: 23px; text-transform: none; letter-spacing: 0; color: var(--ink); }
+.rungs.tools .rung.on .l { color: var(--accent); }
+.rungs.tools code { font-family: var(--sans); font-size: 25px; font-weight: 400; color: var(--muted); }
+
+/* title + close */
+.title .inner { justify-content: center; }
+.title .split { grid-template-columns: 1.15fr 1fr; gap: 40px; }
+.title .huge { font-size: 124px; }
+.title .meta { font-size: 28px; color: var(--muted); margin-top: 34px; }
+.qr { width: 380px; height: 380px; background: #fff; padding: 16px; border: 1px solid var(--rule); border-radius: 12px; }
+.qr img { width: 100%; height: 100%; display: block; }
+.scan { font-size: 24px; font-weight: 600; margin-top: 28px; line-height: 1.45; }
+.scan span { display: block; font-weight: 400; color: var(--muted); font-size: 21px; margin-top: 6px; }
+
+
+/* one question, followed through */
+.ask { background: var(--paper2); border: 1px solid var(--rule); border-radius: 28px; padding: 56px 64px; max-width: 1300px; box-shadow: 0 14px 40px rgba(25,20,16,.08); }
+.ask .who { font-size: 24px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.ask .q { font-family: var(--serif); font-size: 104px; line-height: 1.08; margin-top: 18px; letter-spacing: -.015em; }
+.passes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; margin: auto 0; }
+.pass { background: var(--paper2); border: 1px solid var(--rule); border-radius: 16px; padding: 32px 34px; display: flex; flex-direction: column; gap: 16px; }
+.pass .role { font-size: 19px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.pass .out { font-family: var(--serif); font-size: 38px; line-height: 1.22; }
+.pass .note { font-size: 21px; color: var(--accent2); margin-top: auto; }
+.pass .out .num { font-family: var(--sans); font-size: .8em; }
+.pass.no { border-color: var(--accent); }
+.pass.no .role, .pass.no .note { color: var(--accent); }
+.pass.no s { text-decoration-color: var(--accent); text-decoration-thickness: 3px; color: var(--muted); }
+
+.benchgrid { display: grid; grid-template-columns: 1fr 300px; gap: 64px; align-items: center; margin: auto 0; }
+.benchgrid table.t { margin: 0; }
+.qr.sm { width: 300px; height: 300px; padding: 14px; }
+.benchqr .scan { text-align: center; }
+table.t.rules td { font-size: 25px; }
+table.t.rules td:first-child { width: 38%; }
+table.t.rules td:nth-child(2) { width: 27%; }
+table.t.rules b.bycode { color: var(--accent2); }
+table.t.rules b.byai { color: var(--accent); }
+/* chrome */
+.counter { position: fixed; right: 20px; bottom: 14px; font-family: var(--mono); font-size: 12px; color: var(--muted); z-index: 10; font-variant-numeric: tabular-nums; }
+.hint { position: fixed; left: 20px; bottom: 14px; font-size: 12px; color: var(--muted); z-index: 10; transition: opacity 500ms; }
+.hint.gone { opacity: 0; }
+#overview { position: fixed; inset: 0; background: #E8E2D4; z-index: 30; overflow: auto; padding: 40px 48px; display: none; }
+#overview.show { display: block; }
+#overview .ot { font-size: 13px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin-bottom: 20px; }
+#overview .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+#overview button { all: unset; cursor: pointer; display: grid; grid-template-columns: 40px 1fr; gap: 8px; align-items: baseline; padding: 16px 18px; border: 1px solid var(--rule); border-radius: 10px; background: var(--paper); font-family: var(--serif); font-size: 22px; color: var(--ink); }
+#overview button:hover, #overview button:focus-visible { border-color: var(--accent); outline: none; }
+#overview button.cur { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+#overview button .i { font-family: var(--mono); color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+
+<div class="viewport" id="viewport">
+<div class="stage" id="stage">
+
+<!-- 01 -->
+<section class="slide title" data-title="Title">
+<div class="inner">
+  <div class="split wide-img" style="margin:0">
+    <div class="txt">
+      <div class="eyebrow">AAIF Pune Connect #3 · Agentic AI Day · 10 Oct 2026</div>
+      <div class="huge" style="margin-top:28px">Building a <em style="white-space:nowrap">domain&#8209;specific</em> harness</div>
+      <div class="meta">Varun Srinivas · Coditas</div>
+    </div>
+    <img src="illos/09-tailor.png" alt="The mascot measures a half-made harness on a tailor's table">
+  </div>
+</div>
+</section>
+
+<!-- 02 -->
+<section class="slide" data-title="Hi, I'm Varun">
+<div class="inner">
+  <div class="huge">Hi, I’m <em>Varun</em>.</div>
+  <div class="three">
+    <div class="col"><h4>Coditas</h4><p>CTO and Chief AI Officer. We help companies use AI to do real work.</p></div>
+    <div class="col"><h4>Build</h4><p>A toy car that Claude drives. JyotishBench. Lots of small apps.</p></div>
+    <div class="col"><h4>Community</h4><p>I speak at meetups, and host some of them here at Coditas. Like this one.</p></div>
+  </div>
+  <div class="kicker"><em>AI is the best thing to happen to builders.</em></div>
+</div>
+</section>
+
+<!-- 03 -->
+<section class="slide" data-title="A new thing to manage">
+<div class="inner">
+  <div class="split">
+    <div class="txt">
+      <div class="mid">We have a <em>new thing</em> to manage.</div>
+      <div class="say">Network. Compute. Storage. We have managed these for years.<br><b>Now there is a fourth: intelligence.</b></div>
+    </div>
+    <img src="illos/01-resource.png" alt="Four meters on a wall. The fourth, labelled intelligence, is new.">
+  </div>
+  <div class="kicker">You pay for it per use. It can slow down, break, or <em>be wrong</em>.</div>
+</div>
+</section>
+
+<!-- 04 -->
+<section class="slide" data-title="We never do it by hand">
+<div class="inner">
+  <div class="eyebrow">The pattern</div>
+  <div class="mid">We never manage these <em>by hand</em>.</div>
+  <table class="t">
+    <thead><tr><th>Thing</th><th>What manages it</th><th>What it does for us</th></tr></thead>
+    <tbody>
+      <tr><td><b>Network</b></td><td>The network stack</td><td>retries, limits, routing</td></tr>
+      <tr><td><b>Compute</b></td><td>Kubernetes</td><td>starts and scales servers</td></tr>
+      <tr><td><b>Storage</b></td><td>The database</td><td>indexes, caching, backups</td></tr>
+      <tr><td class="hi">Intelligence</td><td class="hi">The harness</td><td>context, tools, checks, limits</td></tr>
+    </tbody>
+  </table>
+  <div class="kicker">The harness does <em>this job for AI</em>.</div>
+</div>
+</section>
+
+<!-- 05 -->
+<section class="slide" data-title="AI is strange">
+<div class="inner">
+  <div class="mid">AI is a <em>strange</em> thing to manage.</div>
+  <div class="four">
+    <div class="col"><div class="bar"></div><h4>Not repeatable</h4><p>Same question. Different answer.</p></div>
+    <div class="col"><div class="bar"></div><h4>Wrong but sure</h4><p>A wrong answer sounds just like a right one.</p></div>
+    <div class="col"><div class="bar"></div><h4>Costs money</h4><p>Every step costs money and time.</p></div>
+    <div class="col"><div class="bar on"></div><h4 class="on">Doesn’t know you</h4><p>It knows the internet. Not your business.</p></div>
+  </div>
+  <div class="kicker">This talk is about <em>the last one</em>.</div>
+</div>
+</section>
+
+<!-- 06 -->
+<section class="slide" data-title="The loop is small">
+<div class="inner">
+  <div class="split">
+    <div class="txt">
+      <div class="eyebrow">Quick recap</div>
+      <div class="mid" style="margin-top:22px">agent = model + <em>harness</em></div>
+<div class="code sm" style="margin-top:34px"><span class="k">for</span> (step = 0; step &lt; 10; step++) {
+  msg = <span class="k">await</span> callLLM(messages)   <span class="c">// think</span>
+  <span class="k">if</span> (!msg.tool_calls) <span class="k">return</span> msg  <span class="c">// done</span>
+  <span class="k">for</span> (tc <span class="k">of</span> msg.tool_calls)        <span class="c">// act</span>
+    messages.push(run(tc))
+}</div>
+    </div>
+    <img src="assets/loop.png" alt="The mascot pushes a cart around a loop: observe, act, check, decide">
+  </div>
+  <div class="kicker">The loop is about 20 lines. <em>The real work is around it.</em></div>
+</div>
+</section>
+
+<!-- 07 -->
+<section class="slide" data-title="6.5% → 31%">
+<div class="inner">
+  <div class="split">
+    <div class="txt">
+      <div class="eyebrow">Same AI model. Same settings.</div>
+      <div class="bignum"><span class="a">6.5%</span><span class="arr">→</span><span class="b">31%</span></div>
+      <div class="say">A research team changed only the harness. Success on a big coding task went up almost five times.</div>
+      <div class="src">HERMES paper, arXiv 2610.07832, 6 Oct 2026</div>
+    </div>
+    <img src="illos/02-same-engine.png" alt="Two carts with the same engine. One is rickety, one is well built.">
+  </div>
+  <div class="kicker">Same engine. <em>Better car.</em></div>
+</div>
+</section>
+
+<!-- 08 -->
+<section class="slide" data-title="Small model, good harness">
+<div class="inner">
+  <div class="eyebrow">Same paper</div>
+  <div class="mid">A good harness helps a <em>small model</em>.</div>
+  <div class="numline">
+    <div><div class="n">+12.4</div><div class="t">points better than other harnesses, on average</div></div>
+    <div><div class="n">4.5</div><div class="t">points. A small, free model came this close to a top model</div></div>
+    <div><div class="n">−26%</div><div class="t">lower cost</div></div>
+  </div>
+  <div class="kicker sm">You may not need a bigger model. You need a <em>better harness</em>.</div>
+</div>
+</section>
+
+<!-- 09 -->
+<section class="slide" data-title="Code checks itself">
+<div class="inner">
+  <div class="split">
+    <div class="txt">
+      <div class="mid">Code checks itself. <em>Most work doesn’t.</em></div>
+      <div class="reasons">
+        <div><b>In code</b>, tests fail when something is wrong. The AI knows right away.</div>
+        <div><b class="hi">In most work</b>, a wrong answer looks fine. You find out much later.</div>
+      </div>
+    </div>
+    <img src="illos/03-checks-itself.png" alt="Left: a machine stamps a tick on code. Right: the mascot holds a sheet next to an empty stand.">
+  </div>
+  <div class="kicker">That is why coding AI got good <em>first</em>.</div>
+</div>
+</section>
+
+<!-- 10 -->
+<section class="slide" data-title="General vs built for your field">
+<div class="inner">
+  <div class="mid">General vs built for <em>your field</em></div>
+  <table class="t cmp">
+    <thead><tr><th></th><th>General · Claude Code, Codex</th><th>Built for your field</th></tr></thead>
+    <tbody>
+      <tr><td><b>What it sees</b></td><td>files, the web</td><td>your data, already worked out</td></tr>
+      <tr><td><b>What it can do</b></td><td>read, edit, run commands</td><td>the actions your experts take</td></tr>
+      <tr><td><b>How it knows it’s done</b></td><td>the tests pass</td><td><b style="color:var(--accent)">checks your experts wrote</b></td></tr>
+      <tr><td><b>Rules</b></td><td>asks you for permission</td><td>your rules, written in code</td></tr>
+      <tr><td><b>How it improves</b></td><td>a notes file</td><td>every fix becomes a test</td></tr>
+    </tbody>
+  </table>
+</div>
+</section>
+
+<!-- 11 -->
+<section class="slide" data-title="Five things to tune">
+<div class="inner">
+  <div class="eyebrow">How to build one</div>
+  <div class="mid">Five things to tune. <em>Same loop.</em></div>
+  <div class="fig"><img src="illos/04-five-levers.png" alt="The mascot pulls the middle of five levers: context, tools, checks, rules, memory"></div>
+</div>
+</section>
+
+<!-- 12 -->
+<section class="slide" data-title="Jyotish">
+<div class="inner">
+  <div class="split">
+    <div class="txt">
+      <div class="eyebrow">A harness I built</div>
+      <div class="mid">Let me show you <em>one I built</em>.</div>
+      <div class="reasons">
+        <div><b>Jyotish is Indian astrology.</b> You give a birth date, time and place.</div>
+        <div>It works out <b>where the planets were</b> at that moment. Then it reads meaning from that chart.</div>
+        <div><b class="hi">Why I picked it:</b> strict rules, exact maths, and nothing to tell you when you’re wrong.</div>
+      </div>
+    </div>
+    <img src="illos/10-chart.png" alt="The mascot studies a square birth chart on a desk beside an astrolabe">
+  </div>
+  <div class="kicker sm">This is not about whether astrology works. It’s about whether <em>AI can follow the rules</em>.</div>
+</div>
+</section>
+
+<!-- 13 -->
+<section class="slide" data-title="Easy to get wrong">
+<div class="inner">
+  <div class="split">
+    <div class="txt">
+      <div class="eyebrow">Why this is hard</div>
+      <div class="mid">Easy to get wrong. <em>Hard to notice.</em></div>
+      <div class="reasons">
+        <div>Jyotish splits your life into <b>periods</b>, each linked to a planet.</div>
+        <div>Get one small rule wrong, and a date <b class="hi">moves by ten years</b>.</div>
+        <div>The answer still reads perfectly.</div>
+      </div>
+    </div>
+    <img src="illos/12-decade.png" alt="The mascot points confidently at a 2013 calendar while 2023 is circled">
+  </div>
+  <div class="kicker">No error. No warning. <em>Just a wrong date.</em></div>
+</div>
+</section>
+
+<!-- 13b -->
+<section class="slide" data-title="One question">
+<div class="inner">
+  <div class="eyebrow">Let’s follow one question · a made-up example</div>
+  <div class="center">
+    <div class="ask">
+      <div class="who">Rahul, 32, Pune</div>
+      <div class="q">“When will I become a <em>millionaire</em>?”</div>
+    </div>
+  </div>
+  <div class="kicker">Let’s see what <em>each of the five</em> does with it.</div>
+</div>
+</section>
+
+<!-- 14 -->
+<section class="slide" data-title="1 · Context">
+<div class="inner">
+  <div class="eyebrow">1 · Context · a real run of the harness</div>
+  <div class="mid">Code works out his chart. <em>AI reads it.</em></div>
+  <div class="vs">
+    <div class="a"><h3>Code works out</h3><ul><li>Born 2 Oct 1994, 9:30 pm, Pune: <b>Taurus rising</b></li><li><b>Mercury</b> rules his savings house. <b>Jupiter</b> rules his gains house.</li><li>Today he is in the Moon’s life period, until 2031</li></ul></div>
+    <div class="b"><h3>The AI gets</h3><ul><li>One list of those facts</li><li>“Use only these facts”</li><li>Saved, so his next question costs <b>about a tenth</b></li></ul></div>
+  </div>
+  <div class="kicker">The AI never works out a planet’s position. <em>Code does.</em></div>
+</div>
+</section>
+
+<!-- 15 -->
+<section class="slide" data-title="2 · Tools">
+<div class="inner">
+  <div class="split">
+    <div class="txt">
+      <div class="eyebrow">2 · Tools · 7 calls in the real run</div>
+      <div class="mid" style="font-size:80px">He asked “when”. <em>So the AI calls tools.</em></div>
+      <div class="rungs tools">
+        <div class="rung"><span class="l">house_report</span><code>his money houses, and who rules them</code></div>
+        <div class="rung"><span class="l">house_report</span><code>the same, read again from the Moon</code></div>
+        <div class="rung on"><span class="l">find_windows</span><code>when a money period meets a trigger</code></div>
+        <div class="rung"><span class="l">graha_report</span><code>how strong his money planets are</code></div>
+      </div>
+    </div>
+    <img src="illos/05-ladder.png" alt="The mascot stands on the just-right rung of a ladder">
+  </div>
+  <div class="kicker sm">The AI never guesses a date. <em>Every date comes from a tool.</em></div>
+</div>
+</section>
+
+<!-- 16 -->
+<section class="slide" data-title="3 · Checks">
+<div class="inner">
+  <div class="split">
+    <div class="txt">
+      <div class="eyebrow">3 · Checks · for Rahul’s question</div>
+      <div class="mid" style="font-size:80px">Before Rahul sees it, <em>code checks it</em>.</div>
+      <div class="reasons">
+        <div><b>Did it look at both money houses?</b> Code checks the steps.</div>
+        <div><b>Did every date come from a tool?</b> Code checks.</div>
+        <div><b>Any jargon, like “11th house lord”?</b> Code checks.</div>
+        <div><b class="hi">Does it promise he’ll be rich?</b> An AI reviewer blocks it.</div>
+      </div>
+    </div>
+    <img src="illos/06-sieves.png" alt="Three sieves stacked: exact checks, judge, human">
+  </div>
+  <div class="kicker sm">Code first. Then AI. Then a person. <em>In that order.</em></div>
+</div>
+</section>
+
+<!-- 17 -->
+<section class="slide" data-title="4 · Rules">
+<div class="inner">
+  <div class="eyebrow">4 · Rules</div>
+  <div class="mid" style="font-size:80px">Written down once. <em>Checked by someone else.</em></div>
+  <table class="t rules">
+    <thead><tr><th>The rule</th><th>Where it’s written</th><th>Who checks it</th></tr></thead>
+    <tbody>
+      <tr><td><b>Use only the chart facts. Never work out a date.</b></td><td>The expert AI’s instructions</td><td><b class="bycode">Code.</b> No date tool called? The expert is sent back.</td></tr>
+      <tr><td><b>No promises. No diagnosis. Nothing about death.</b></td><td>The expert AI’s instructions</td><td><b class="byai">AI reviewer.</b> If broken, the answer is rewritten.</td></tr>
+      <tr><td><b>No jargon for the person asking.</b></td><td>The plain-words AI’s instructions</td><td><b class="bycode">Code,</b> with a word list. Always rewritten.</td></tr>
+      <tr><td><b>Say nothing the expert didn’t say.</b></td><td>Built in: the plain-words AI never sees the chart</td><td><b class="byai">AI reviewer.</b> If broken, the answer is rewritten.</td></tr>
+    </tbody>
+  </table>
+  <div class="kicker sm">The AI that follows a rule <em>never checks its own work</em>.</div>
+</div>
+</section>
+
+<!-- 17a -->
+<section class="slide" data-title="Rules in action">
+<div class="inner">
+  <div class="eyebrow">Rules in action · Rahul’s real run, shortened</div>
+  <div class="mid" style="font-size:80px">Three steps. <em>Each with limits.</em></div>
+  <div class="passes">
+    <div class="pass"><div class="role">Expert AI · the reader</div><div class="out">“Jan 2033 to Jan 2034. Jupiter, his <span class="num">11th</span> lord, runs as sub-period while Saturn moves through his <span class="num">2nd</span> house. This is the convergence.”</div></div>
+    <div class="pass"><div class="role">Plain-words AI · the voice</div><div class="out">“The year that stands out most is late January 2033 to early January 2034.”</div><div class="note">Never sees his chart</div></div>
+    <div class="pass no"><div class="role">AI reviewer · can only say no</div><div class="out">✓ Passed. No flags.</div><div class="note">Would reject: “You will be a millionaire by 2033.” That’s a promise.</div></div>
+  </div>
+  <div class="kicker">A writer can make things up. A checker can <em>only say no</em>.</div>
+</div>
+</section>
+
+<!-- 17b -->
+<section class="slide" data-title="Rahul's answer">
+<div class="inner">
+  <div class="eyebrow">What Rahul got · real run, shortened</div>
+  <div class="mid">Not one date. <em>A sequence.</em></div>
+  <table class="t">
+    <tbody>
+      <tr><td><b>Jun 2027 – Nov 2028</b></td><td>A real step up in base income. A raise, not a windfall.</td></tr>
+      <tr><td><b>Jun 2029 – Feb 2031</b></td><td>The best time to save. Put money away.</td></tr>
+      <tr><td class="hi">Jan 2033 – Jan 2034</td><td class="hi">The year that stands out most. Many signals line up.</td></tr>
+      <tr><td><b>2041 – 2043</b></td><td>Later, but possibly the largest of all.</td></tr>
+    </tbody>
+  </table>
+  <div class="kicker sm">“Money comes through sustained work, not luck.” <em>And no promise of a million.</em></div>
+</div>
+</section>
+
+<!-- 18 -->
+<section class="slide" data-title="5 · Memory">
+<div class="inner">
+  <div class="split">
+    <div class="txt">
+      <div class="eyebrow">5 · Memory · for Rahul’s question</div>
+      <div class="mid" style="font-size:80px">An expert spots a gap. <em>It never comes back.</em></div>
+      <div class="reasons">
+        <div><b>An astrologer reviews it:</b> “You only looked at Jupiter. Start with who rules his money houses.”</div>
+        <div><b>That fix becomes a rule</b> for every money question.</div>
+        <div><b class="hi">And a test,</b> so it is never missed again.</div>
+      </div>
+    </div>
+    <img src="illos/07-corrections.png" alt="A loop: draft, fix, new rule. The mascot pins a corrected note to a board.">
+  </div>
+  <div class="kicker sm">You are not training the model. You are <em>training the harness</em>.</div>
+</div>
+</section>
+
+<!-- 19 -->
+<section class="slide" data-title="What it costs">
+<div class="inner">
+  <div class="eyebrow">What it costs · Rahul’s question</div>
+  <div class="mid">Pay for thinking. <em>Not for writing.</em></div>
+  <div class="numline">
+    <div><div class="n">47¢</div><div class="t">for Rahul’s whole answer, all three steps</div></div>
+    <div><div class="n">90%</div><div class="t">of that went to the reader, the step that does the thinking</div></div>
+    <div><div class="n">1¢</div><div class="t">for the voice. The reviewer: about 3¢</div></div>
+  </div>
+  <div class="kicker">Each step uses <em>its own model</em>.</div>
+</div>
+</section>
+
+<!-- 20 -->
+<section class="slide" data-title="JyotishBench">
+<div class="inner">
+  <div class="eyebrow">19 AI models · 56 real questions</div>
+  <div class="mid">Which AI reads a chart <em>best</em>?</div>
+  <div class="benchgrid">
+    <table class="t">
+      <thead><tr><th>Model</th><th>Overall</th><th>Relationships</th><th style="color:var(--accent)">Health</th><th>Career</th><th>Money</th></tr></thead>
+      <tbody>
+        <tr><td><b>GPT-6 Astra</b></td><td><b>86.6</b></td><td>93.2</td><td class="hi">69.9</td><td>92.2</td><td>90.9</td></tr>
+        <tr><td><b>Grok 4.7</b></td><td><b>85.6</b></td><td>91.3</td><td class="hi">70.4</td><td>92.5</td><td>88.2</td></tr>
+        <tr><td><b>GPT-5.6 Terra</b></td><td><b>85.1</b></td><td>92.6</td><td class="hi">67.9</td><td>91.1</td><td>88.6</td></tr>
+        <tr><td><b>Claude Opus 5.5</b></td><td><b>83.0</b></td><td>93.0</td><td class="hi">64.5</td><td>89.5</td><td>84.9</td></tr>
+        <tr><td><b>Kimi K3</b></td><td><b>81.4</b></td><td>92.0</td><td class="hi">60.8</td><td>88.5</td><td>84.3</td></tr>
+        <tr><td><b>MiniMax M3</b></td><td><b>71.0</b></td><td>75.4</td><td class="hi">53.4</td><td>83.5</td><td>71.6</td></tr>
+      </tbody>
+    </table>
+    <div class="benchqr">
+      <div class="qr sm"><img src="assets/jyotishbench-qr.svg" alt="QR code to jyotishbench.fyi"></div>
+      <div class="scan">jyotishbench.fyi<span>Scan for the full results</span></div>
+    </div>
+  </div>
+  <div class="kicker sm">Every AI is weakest on <em>health</em>. The best gets 70 out of 100.</div>
+</div>
+</section>
+
+<!-- 21 -->
+<section class="slide" data-title="Strong and light">
+<div class="inner">
+  <div class="split">
+    <div class="txt">
+      <div class="mid" style="font-size:84px">Build strong where it’s <em>yours</em>.</div>
+      <div class="reasons">
+        <div><b class="hi">Build strong:</b> your data, your rules, your checks. No new AI model will know these.</div>
+        <div><b>Keep it light:</b> prompt tricks and workarounds. The next AI model makes them useless.</div>
+      </div>
+    </div>
+    <img src="illos/08-thick-thin.png" alt="A strong stone base labelled your data, rules and checks, with light scaffolding on top labelled prompt tricks">
+  </div>
+  <div class="kicker sm">The rules and tests will outlast <em>every AI model I use</em>.</div>
+</div>
+</section>
+
+<!-- 22 -->
+<section class="slide" data-title="Start on Monday">
+<div class="inner">
+  <div class="eyebrow">Start on Monday</div>
+  <div class="mid">Six steps to <em>your first</em> harness</div>
+  <div class="steps">
+    <div class="step"><div class="n">1</div><div class="t">Pick <b>one task</b> an expert does every week.<span>Start small.</span></div></div>
+    <div class="step"><div class="n">2</div><div class="t">Watch them. <b>Write down what they check.</b><span>This list is your plan.</span></div></div>
+    <div class="step"><div class="n">3</div><div class="t">Move all the maths <b>into code</b>.<span>AI reads. Code calculates.</span></div></div>
+    <div class="step"><div class="n">4</div><div class="t">Turn their actions into <b>tools</b>.<span>Anything the AI might guess.</span></div></div>
+    <div class="step"><div class="n">5</div><div class="t">Write their rules <b>as code</b>.<span>Not in the prompt.</span></div></div>
+    <div class="step"><div class="n">6</div><div class="t">Turn every fix <b>into a test</b>.<span>Then repeat.</span></div></div>
+  </div>
+</div>
+</section>
+
+<!-- 23 -->
+<section class="slide" data-title="Don't rebuild the loop">
+<div class="inner">
+  <div class="eyebrow">Build or reuse</div>
+  <div class="mid">Build the loop once <em>to learn</em>. Then use a ready one.</div>
+  <div class="vs">
+    <div class="a"><h3>Learn</h3><ul><li>Build it by hand, once</li><li>Small. One file per part.</li><li><span class="mono">github.com/varun1505/nomadcoder-harness-engg</span></li></ul></div>
+    <div class="b"><h3>Use</h3><ul><li>Claude Agent SDK</li><li>LangChain <span class="mono">create_agent</span></li><li>Pi</li></ul></div>
+  </div>
+  <div class="kicker">Spend your time on the <em>five things</em> that make it yours.</div>
+</div>
+</section>
+
+<!-- 24 -->
+<section class="slide" data-title="Three things">
+<div class="inner">
+  <div class="eyebrow">Take home</div>
+  <div class="mid">Three things to <em>take home</em>.</div>
+  <div class="three big">
+    <div class="col"><div class="bar on"></div><h4>AI is a <em>new thing</em> to manage.</h4><p>The harness manages it. Same model, better harness: 6.5% to 31%.</p></div>
+    <div class="col"><div class="bar on"></div><h4>Your field doesn’t <em>check itself</em>.</h4><p>Write the checks your experts already do in their heads.</p></div>
+    <div class="col"><div class="bar on"></div><h4>AI reads. <em>Code calculates.</em></h4><p>If the AI might guess it, put it in code.</p></div>
+  </div>
+</div>
+</section>
+
+<!-- 25 -->
+<section class="slide" data-title="Thank you">
+<div class="inner">
+  <div class="split" style="grid-template-columns:1.2fr 1fr">
+    <div class="txt">
+      <div class="eyebrow">Thank you</div>
+      <div class="huge" style="margin-top:22px">Own the <em>harness</em>.</div>
+      <div class="say">Everyone gets the same AI models. Your harness is what makes yours better.</div>
+      <div class="say" style="margin-top:18px"><b>jyotishbench.fyi</b></div>
+    </div>
+    <div>
+      <div class="qr"><img src="assets/linkedin-qr.png" alt="QR code to Varun's LinkedIn"></div>
+      <div class="scan">Scan to connect on LinkedIn<span>Varun Srinivas · Coditas</span></div>
+    </div>
+  </div>
+</div>
+</section>
+
+</div>
+</div>
+
+<div class="footbar"></div>
+<div class="counter" id="counter"></div>
+<div class="hint" id="hint">← → navigate · G all slides · F fullscreen</div>
+<div id="overview"><div class="ot">All slides · click to jump · Esc to close</div><div class="grid" id="ov-grid"></div></div>
+
+<script>
+(function () {
+  var W = 1920, H = 1080;
+  var stage = document.getElementById("stage");
+  var slides = Array.prototype.slice.call(document.querySelectorAll(".slide"));
+  var total = slides.length, i = 0;
+  var counter = document.getElementById("counter");
+  var ov = document.getElementById("overview"), ovGrid = document.getElementById("ov-grid");
+
+  function fit() { stage.style.transform = "translate(-50%, -50%) scale(" + Math.min(innerWidth / W, innerHeight / H) + ")"; }
+  addEventListener("resize", fit); fit();
+
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+  function show(n) {
+    i = Math.max(0, Math.min(total - 1, n));
+    slides.forEach(function (s, k) { s.classList.toggle("active", k === i); });
+    counter.textContent = pad(i + 1) + " / " + pad(total);
+    history.replaceState(null, "", "#" + (i + 1));
+    Array.prototype.forEach.call(ovGrid.children, function (b, k) { b.classList.toggle("cur", k === i); });
+  }
+  function next() { show(i + 1); } function prev() { show(i - 1); }
+
+  slides.forEach(function (s, k) {
+    var b = document.createElement("button");
+    var a = document.createElement("span"); a.className = "i"; a.textContent = pad(k + 1);
+    var t = document.createElement("span"); t.textContent = s.dataset.title || ("Slide " + (k + 1));
+    b.appendChild(a); b.appendChild(t);
+    b.addEventListener("click", function () { show(k); ov.classList.remove("show"); });
+    ovGrid.appendChild(b);
+  });
+
+  var jump = "", jt;
+  document.addEventListener("keydown", function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    var k = e.key;
+    if (k === "Escape") { ov.classList.remove("show"); return; }
+    if (ov.classList.contains("show") && k !== "g" && k !== "G") return;
+    if (k === "ArrowRight" || k === "ArrowDown" || k === " " || k === "PageDown" || k === "Enter") { e.preventDefault(); next(); }
+    else if (k === "ArrowLeft" || k === "ArrowUp" || k === "PageUp" || k === "Backspace") { e.preventDefault(); prev(); }
+    else if (k === "Home") show(0);
+    else if (k === "End") show(total - 1);
+    else if (k === "g" || k === "G" || k === "o" || k === "O") ov.classList.toggle("show");
+    else if (k === "f" || k === "F") { try { if (!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); } catch (_) {} }
+    else if (/^[0-9]$/.test(k)) { jump += k; clearTimeout(jt); jt = setTimeout(function () { if (jump) show(parseInt(jump, 10) - 1); jump = ""; }, 450); }
+  });
+
+  document.getElementById("viewport").addEventListener("click", function (e) {
+    if (e.target.closest("a, button")) return;
+    if (e.clientX > innerWidth * 0.3) next(); else prev();
+  });
+  var tx = null;
+  document.addEventListener("touchstart", function (e) { tx = e.touches[0].clientX; }, { passive: true });
+  document.addEventListener("touchend", function (e) {
+    if (tx === null) return;
+    var dx = e.changedTouches[0].clientX - tx; tx = null;
+    if (Math.abs(dx) > 40) { if (dx < 0) next(); else prev(); }
+  });
+  setTimeout(function () { document.getElementById("hint").classList.add("gone"); }, 6000);
+
+  var start = parseInt((location.hash || "").slice(1), 10);
+  show(isNaN(start) ? 0 : start - 1);
+})();
+</script>
+</body>
+</html>
