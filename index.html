@@ -188,6 +188,14 @@ table.t.rules td:first-child { width: 38%; }
 table.t.rules td:nth-child(2) { width: 27%; }
 table.t.rules b.bycode { color: var(--accent2); }
 table.t.rules b.byai { color: var(--accent); }
+.trygrid { display: grid; grid-template-columns: 1fr 1.15fr; gap: 64px; align-items: start; margin: auto 0; }
+.tryleft, .tryright { min-width: 0; }
+.tryright { display: flex; flex-direction: column; gap: 16px; }
+.say-it { background: var(--paper2); border: 1px solid var(--rule); border-radius: 14px; padding: 18px 24px; font-family: var(--serif); font-size: 33px; line-height: 1.25; }
+.tryqr { display: flex; align-items: center; gap: 24px; margin-top: 30px; }
+.tryqr .scan { margin-top: 0; }
+.qr.xs { width: 200px; height: 200px; padding: 10px; }
+.trygrid .small b { font-weight: 600; }
 /* chrome */
 .counter { position: fixed; right: 20px; bottom: 14px; font-family: var(--mono); font-size: 12px; color: var(--muted); z-index: 10; font-variant-numeric: tabular-nums; }
 .hint { position: fixed; left: 20px; bottom: 14px; font-size: 12px; color: var(--muted); z-index: 10; transition: opacity 500ms; }
@@ -642,6 +650,34 @@ table.t.rules b.byai { color: var(--accent); }
     <div class="col"><div class="bar on"></div><h4>Your field doesn’t <em>check itself</em>.</h4><p>Write the checks your experts already do in their heads.</p></div>
     <div class="col"><div class="bar on"></div><h4>AI reads. <em>Code calculates.</em></h4><p>If the AI might guess it, put it in code.</p></div>
   </div>
+</div>
+</section>
+
+<!-- 27b -->
+<section class="slide" data-title="Try it yourself">
+<div class="inner">
+  <div class="eyebrow">Try it yourself · free · no sign-up</div>
+  <div class="mid" style="font-size:80px">Plug the tools into <em>your own agent</em>.</div>
+  <div class="trygrid">
+    <div class="tryleft">
+      <div class="small" style="margin-bottom:12px">In Claude Code:</div>
+      <div class="code sm">claude mcp add --transport http \
+  jyotish https://mcp.jyotisha.fyi/mcp</div>
+      <div class="small" style="margin-top:14px">Cursor, or any agent that speaks MCP: use <b style="color:var(--ink)">mcp.jyotisha.fyi/mcp</b></div>
+      <div class="tryqr">
+        <div class="qr xs"><img src="assets/mcp-qr.svg" alt="QR code to mcp.jyotisha.fyi"></div>
+        <div class="scan">mcp.jyotisha.fyi<span>Scan for setup</span></div>
+      </div>
+    </div>
+    <div class="tryright">
+      <div class="small" style="margin-bottom:4px">Then just ask:</div>
+      <div class="say-it">“I was born on 14 March 1992 at 6:45 am in Nagpur. <em>When will I get married?</em>”</div>
+      <div class="say-it">“I was born on 21 June 1988 at 11:20 pm in Mumbai. <em>Is next year good for a job change?</em>”</div>
+      <div class="say-it">“I was born on 5 January 2000 at 4:10 pm in Bengaluru. <em>Am I in sade sati right now?</em>”</div>
+      <div class="say-it">“I was born on 2 October 1994 at 9:30 pm in Pune. <em>When will I become a millionaire?</em>”</div>
+    </div>
+  </div>
+  <div class="kicker sm">The tools bring <em>the rules with them</em>. Try different models. See who reads best.</div>
 </div>
 </section>
 
