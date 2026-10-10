@@ -6,19 +6,64 @@ The Jyotish tools from the talk are live on a public MCP server. **Free. No sign
 
 ## 1. Connect your agent
 
-**Claude Code**
+Pick your tool. Every option points at the same address: `https://mcp.jyotisha.fyi/mcp`.
+
+| Tool | How |
+|---|---|
+| [Claude Code](#claude-code) | one command |
+| [Claude Desktop / claude.ai](#claude-desktop-and-claudeai) | Connectors menu, or a config file |
+| [Cursor](#cursor) | `mcp.json` |
+| [VS Code (Copilot agent mode)](#vs-code) | one command, or `mcp.json` |
+| [Codex CLI](#codex-cli) | one command |
+| [Gemini CLI](#gemini-cli) | one command |
+| [OpenCode](#opencode) | `opencode.json` |
+| [Windsurf](#windsurf) | `mcp_config.json` |
+| [Anything else](#anything-else) | URL, or a local bridge |
+
+### Claude Code
 
 ```
 claude mcp add --transport http jyotish https://mcp.jyotisha.fyi/mcp
 ```
 
-**Claude (web or desktop app)**
+Add `--scope user` to use it in every project, not just the current one.
 
-Settings → Connectors → Add custom connector → paste `https://mcp.jyotisha.fyi/mcp`
+### Claude Desktop and claude.ai
 
-**Cursor**
+**Option A: the Connectors menu** (simplest)
 
-Add this to `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global):
+1. Open **Settings → Connectors**.
+2. Click **Add custom connector**.
+3. Name it `jyotish` and paste `https://mcp.jyotisha.fyi/mcp`.
+4. In a new chat, turn the connector on from the tools menu.
+
+A connector added on claude.ai also shows up in the desktop app. If you don't see **Add custom connector** on your plan, use Option B.
+
+**Option B: the config file** (desktop app, any plan)
+
+Open **Settings → Developer → Edit Config**. That opens `claude_desktop_config.json`:
+
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+
+Add this, then quit and reopen Claude:
+
+```json
+{
+  "mcpServers": {
+    "jyotish": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://mcp.jyotisha.fyi/mcp"]
+    }
+  }
+}
+```
+
+This runs [`mcp-remote`](https://www.npmjs.com/package/mcp-remote), a small local bridge to the server. It needs Node.js installed. If the file already has an `mcpServers` block, add `jyotish` inside it instead of adding a second block.
+
+### Cursor
+
+**Settings → MCP → Add new MCP server**, or add this to `.cursor/mcp.json` (one project) or `~/.cursor/mcp.json` (every project):
 
 ```json
 {
@@ -28,9 +73,66 @@ Add this to `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global):
 }
 ```
 
-**Any other agent or harness**
+### VS Code
 
-Point its MCP client at `https://mcp.jyotisha.fyi/mcp`. If you are building your own harness, list the tools with `tools/list` and call them like any other tool.
+For GitHub Copilot in agent mode. One command:
+
+```
+code --add-mcp '{"name":"jyotish","type":"http","url":"https://mcp.jyotisha.fyi/mcp"}'
+```
+
+Or add this to `.vscode/mcp.json` in your project:
+
+```json
+{
+  "servers": {
+    "jyotish": { "type": "http", "url": "https://mcp.jyotisha.fyi/mcp" }
+  }
+}
+```
+
+### Codex CLI
+
+```
+codex mcp add jyotish --url https://mcp.jyotisha.fyi/mcp
+```
+
+### Gemini CLI
+
+```
+gemini mcp add --transport http --scope user jyotish https://mcp.jyotisha.fyi/mcp
+```
+
+### OpenCode
+
+Add this to `opencode.json` in your project, or to `~/.config/opencode/opencode.json`:
+
+```json
+{
+  "mcp": {
+    "jyotish": { "type": "remote", "url": "https://mcp.jyotisha.fyi/mcp", "enabled": true }
+  }
+}
+```
+
+### Windsurf
+
+Add this to `~/.codeium/windsurf/mcp_config.json`, then refresh the MCP list in Cascade:
+
+```json
+{
+  "mcpServers": {
+    "jyotish": { "serverUrl": "https://mcp.jyotisha.fyi/mcp" }
+  }
+}
+```
+
+### Anything else
+
+- **Your tool supports remote MCP servers:** give it `https://mcp.jyotisha.fyi/mcp` as an HTTP (streamable HTTP) server.
+- **Your tool only runs local servers:** use the bridge as the command: `npx -y mcp-remote https://mcp.jyotisha.fyi/mcp`
+- **You are building your own harness:** call `tools/list` and use the tools like any other. No API key needed.
+- **Just want to poke at it:** run `npx @modelcontextprotocol/inspector`, choose *Streamable HTTP*, and connect to the URL.
 
 ## 2. Ask it something
 
